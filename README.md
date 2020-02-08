@@ -45,4 +45,4 @@ open -a SwiftEndpoint.xcodeproj
 
 Copyright © 2020 Dariusz Rybicki Darrarski
 
-License: *TBD*
+License: [GNU GPLv3](LICENSE)

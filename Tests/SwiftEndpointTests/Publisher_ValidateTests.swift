@@ -22,8 +22,9 @@ final class Publisher_ValidateTests: XCTestCase {
       .validate { value in
         self.didValidateValues.append(value)
         if let error = self.validationFailure {
-          throw error
+			return .failure(error)
         }
+		return .success(())
     }
     .sink(receiveCompletion: { completion in
       self.didComplete = completion

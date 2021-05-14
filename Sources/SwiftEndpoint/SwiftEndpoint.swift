@@ -15,7 +15,7 @@ public struct URLRequestFactory<Request, Failure: Error> {
 
 /// Performs `URLRequest` and returns the `Foundation` result
 /// - Parameter create: takes function that performs `URLRequest` and returns type erased `URLSession.DataTaskPublisher`
-public struct URLResponseFactory<Failure: Error> {
+public struct URLResponseFactory {
 	var create: (URLRequest) -> AnyPublisher<URLSession.DataTaskPublisher.Output, URLError>
 	
 	public init(
@@ -62,7 +62,7 @@ public extension Endpoint {
 	/// Initializer that takes structs that handle each state of URLRequest handling.
 	init(
 		requestFactory: URLRequestFactory<Request, Failure>,
-		responseFactory: URLResponseFactory<Failure>,
+		responseFactory: URLResponseFactory,
 		urlErrorMapper: URLErrorMapper<Failure>,
 		responseValidator: URLResponseHandler<Void, Failure>,
 		responseDecoder: URLResponseHandler<Response, Failure>

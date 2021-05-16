@@ -15,63 +15,95 @@
 
 ## 📝 Description
 
-**`Endpoint`** is a generic function that transforms some `Request` into some `Response` publisher:
+**`Endpoint`** is a generic struct that creates transformation pipline that takes some `Request` and turn it into some `Response` publisher:
  
 ```swift
-typealias Endpoint<Request, Response> = (Request) -> AnyPublisher<Response, Error>
+public struct Endpoint<Request, Response, Failure: Error> {
+	public var request: (Request) -> AnyPublisher<Response, Failure>
+}
+```
+
+**`Endpoint`** initializer creates an `Endpoint` that uses some helpers to perform network request:
+
+```swift
+public extension Endpoint {
+	init(
+		requestFactory: URLRequestFactory<Request, Failure>,
+		responseFactory: URLResponseFactory<Failure>,
+		urlErrorMapper: URLErrorMapper<Failure>,
+		responseValidator: URLResponseHandler<Void, Failure>,
+		responseDecoder: URLResponseHandler<Response, Failure>
+	) {
+		request = { request in
+			requestFactory.create(request)
+				.publisher
+				.flatMap {
+					responseFactory.create($0)
+						.mapError(urlErrorMapper.transform)
+				}
+				.validate(responseValidator.run)
+				.flatMap {
+					responseDecoder.run($0)
+						.publisher
+				}
+				.eraseToAnyPublisher()
+		}
+	}
+}
 ```
 
 ### 🧩 Foundation URL networking
 
 Set of helpers for building API clients based on the native [Foundation](https://developer.apple.com/documentation/foundation)'s networking.
 
-**`urlEndpoint`** function creates an `Endpoint` that uses Foundation's networking:
+**`URLRequestFactory<Request, Failure: Error>`** is a generic struct that transforms some `Request` into `URLRequest`, or returns generic `Error`:
 
 ```swift
-func urlEndpoint<Request, Response>(
-  requestFactory: @escaping URLRequestFactory<Request>,
-  publisherFactory: @escaping URLResponsePublisherFactory,
-  responseValidator: @escaping URLResponseValidator,
-  responseDecoder: @escaping URLResponseDecoder<Response>
-) -> Endpoint<Request, Response>
-```
-
-**`URLRequestFactory<Request>`** is a generic function that transforms some `Request` into `URLRequest`, optionally throwing an error:
-
-```swift
-typealias URLRequestFactory<Request> = (Request) throws -> URLRequest
-```
-
-**`URLResponsePublisherFactory`** is a function that transforms `URLRequest` into `URLResponsePublisher`:
-
-```swift
-typealias URLResponsePublisherFactory = (URLRequest) -> URLResponsePublisher
-```
-
-Convenience extension allows to use `URLSession` as a `URLResponsePublisherFactory`:
-
-```swift
-extension URLSession {
-  var urlResponsePublisherFactory: URLResponsePublisherFactory { get }
+public struct URLRequestFactory<Request, Failure: Error> {
+	var create: (Request) -> Result<URLRequest, Failure>
 }
 ```
 
-**`URLResponsePublisher`** is a combine publisher emitting network responses or failing with networking error:
+**`URLResponseFactory<Failure: Error>`** is a generic struct that performs `URLRequest` and returns erased `URLSession.DataTaskPublisher`:
 
 ```swift
-typealias URLResponsePublisher = AnyPublisher<(data: Data, response: URLResponse), Error>
+public struct URLResponseFactory<Failure: Error> {
+	var create: (URLRequest) -> AnyPublisher<URLSession.DataTaskPublisher.Output, URLError>
+	
+	public init(
+		create: @escaping (URLRequest) -> AnyPublisher<URLSession.DataTaskPublisher.Output, URLError>
+	) {
+		self.create = create
+	}
+}
 ```
 
-**`URLResponseValidator`** is a function that validates response `Data` and `URLResponse`, optionally throwing validation error:
+**`URLErrorMapper<Failure: Error>`** is a struct that maps `URLError` into generic `Failure`:
 
 ```swift
-typealias URLResponseValidator = (Data, URLResponse) throws -> Void
+public struct URLErrorMapper<Failure: Error> {
+	var transform: (URLError) -> Failure
+	
+	public init(
+		transform: @escaping (URLError) -> Failure
+	) {
+		self.transform = transform
+	}
+}
 ```
 
-**`URLResponseDecoder<Response>`** is a generic function that transforms response `Data` and `URLResponse` into some `Response`, optionally throwing decoding error:
+**`URLResponseHandler<Response, Failure: Error>`** is a struct that handles `URLSession.DataTaskPublisher.Output`. It's used for both: validating the request AND decoding the request. It returns generic `Failure`
 
 ```swift
-typealias URLResponseDecoder<Response> = (Data, URLResponse) throws -> Response
+public struct URLResponseHandler<Response, Failure: Error> {
+	var run: (URLSession.DataTaskPublisher.Output) -> Result<Response, Failure>
+	
+	public init(
+		run: @escaping (URLSession.DataTaskPublisher.Output) -> Result<Response, Failure>
+	) {
+		self.run = run
+	}
+}
 ```
 
 ## 🧰 Installation
